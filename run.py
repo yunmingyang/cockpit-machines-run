@@ -1,30 +1,33 @@
 import os
 import sys
 import yaml
+import secrets
 import argparse
 from chains import *
 from steps import GlobalVars
 
 
-def init(path='job'):
-    if not os.path.exists(path):
-        print('no job configuration, please set a configuration file with yaml')
-    with open(path, 'r') as f:
-        init_conf = yaml.load(f, Loader=yaml.FullLoader)
-        
+def init(path):
     GlobalVars.Pinfile_name = 'cockpit-machines'
-    GlobalVars.workspace_prefix = init_conf['workspace']
+    GlobalVars.workspace_prefix = path
     GlobalVars.environment_file = '{}/environment_file'.format(GlobalVars.workspace_prefix)
     GlobalVars.linchpin_workspace = '{}/linchpin-workspace'.format(GlobalVars.workspace_prefix)
     GlobalVars.ansible_workspace = '{}/ansible-workspace'.format(GlobalVars.workspace_prefix)
     GlobalVars.test_suite = '{}/cockpit'.format(os.environ.get('WORKSPACE', '/root'))
-
+    GlobalVars.test_suite_result = GlobalVars.test_suite + '/result_' + secrets.token_hex(5)
+    
+    print('Pinfile_name: ', GlobalVars.Pinfile_name)
+    print('workspace_prefix: ', GlobalVars.workspace_prefix)
+    print('environment_file: ', GlobalVars.environment_file)
+    print('linchpin_workspace: ', GlobalVars.linchpin_workspace)
+    print('ansible_workspace: ', GlobalVars.ansible_workspace)
+    print('test_suite: ', GlobalVars.test_suite)
+    print('test_suite_result: ', GlobalVars.test_suite_result)
 
 def main():
     parse = argparse.ArgumentParser()
-    parse.add_argument('conf',
-                       help='Configuration file',
-                       default='job')
+    parse.add_argument('workspace',
+                       help='workspace location')
     parse.add_argument('-pre', 
                        '--preprocessing', 
                        dest='preprocessing', 
@@ -47,7 +50,7 @@ def main():
 
     args = parse.parse_args()
     
-    init(args.conf)
+    init(args.workspace)
 
     event_list = []
     handle = DefaultHandler()
@@ -67,7 +70,9 @@ def main():
 
     
     for e in event_list:
+        print('------------------------------{} starting...---------------------------'.format(e))
         handle.handle(e)
+        print('------------------------------{} finished------------------------------'.format(e))
 
 if __name__ == '__main__':
     sys.exit(main())

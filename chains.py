@@ -18,11 +18,12 @@ class Chains:
 
         if hasattr(self, attr):
             method = getattr(self, attr)
-            method(event)
+            method()
         elif self.next:
             self.next.handle(event)
         elif hasattr(self, 'handle_default'):
             self.handle_default(event)
+        
 
 
 class DefaultHandler(Chains):
@@ -31,31 +32,19 @@ class DefaultHandler(Chains):
 
 
 class PreprocessingHandler(Chains):
-    def handle_preprocessing(self, event):
-        print("handle {}: starting...".format(event))
+    def handle_preprocessing(self):
         Preprocessing().execute()
-        print("{} finish".format(event))
-        print('------------------------------')
 
 class ProvisionHandler(Chains):
-    def handle_provision(self, event):
-        print("handle {}: starting...".format(event))
+    def handle_provision(self):
         Provision().execute()
-        print("{} finish".format(event))
-        print('------------------------------')
 
 
 class ExecAnsibleHandler(Chains):
-    def handle_exec_ansible(self, event):
-        print("handle {}: starting...".format(event))
+    def handle_exec_ansible(self):
         ExecAnsible().execute()
-        print("{} finish".format(event))
-        print('------------------------------')
 
 
 class RunTestSuiteHandler(Chains):
-    def handle_run_test_suite(self, event):
-        print("handle {}: starting...".format(event))
+    def handle_run_test_suite(self):
         RunTestSuite().execute()
-        print("{} finish".format(event))
-        print('------------------------------')

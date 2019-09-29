@@ -3,8 +3,7 @@ import sys
 import yaml
 import json
 import socket
-import secrets
-import requests
+import urllib3
 import subprocess
 
 
@@ -16,6 +15,7 @@ class GlobalVars:
     ansible_workspace = ''
     environment_file = ''
     test_suite = ''
+    test_suite_result = ''
 
 
 class Preprocessing:
@@ -25,9 +25,10 @@ class Preprocessing:
             if "nightly" in os.environ.get('CI_MESSAGE'):
                 print("Don't need to test nightly build")
                 sys.exit(1)
-
-        compose_id = os.environ.get('COMPOSE_ID') or requests.get('http://download-node-02.eng.bos.redhat.com/rel-eng/rhel-8/RHEL-8/latest-RHEL-8.1/COMPOSE_ID').content.decode('utf-8').strip()
-        compose_status = requests.get('http://download-node-02.eng.bos.redhat.com/rel-eng/rhel-8/RHEL-8/{}/STATUS'.format(compose_id)).content.decode('utf-8').strip()
+                
+        http = urllib3.PoolManager()
+        compose_id = os.environ.get('COMPOSE_ID') or http.request('GET', 'http://download-node-02.eng.bos.redhat.com/rel-eng/rhel-8/RHEL-8/latest-RHEL-8.1/COMPOSE_ID').data.decode('utf-8').strip()
+        compose_status = http.request('GET', 'http://download-node-02.eng.bos.redhat.com/rel-eng/rhel-8/RHEL-8/latest-RHEL-8.1/STATUS').data.decode('utf-8').strip()
         print('the compose id is {}, and status is {}'.format(compose_id, compose_status))
 
         if compose_status != 'FINISHED':
@@ -55,8 +56,11 @@ class Provision():
         if not os.path.exists(GlobalVars.linchpin_workspace):
             print('no linchpin_workspace')
             sys.exit(1)
-
-        subprocess.check_output('linchpin -v -w {} up'.format(GlobalVars.linchpin_workspace), shell=True)
+            
+        with open('{}/run_provision.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
+            subprocess.run('linchpin -v -w {} up'.format(GlobalVars.linchpin_workspace), 
+                           shell=True, 
+                           stdout=f)
 
         with open('{}/resources/linchpin.latest'.format(GlobalVars.linchpin_workspace), 'r') as f:
             res = json.load(f)
@@ -74,15 +78,18 @@ class ExecAnsible():
         if not os.path.exists(GlobalVars.ansible_workspace):
             print('no ansbile_workspace')
             sys.exit(1)
-
-        subprocess.check_output('ansible-playbook {}/refresh_podman.yml'.format(GlobalVars.ansible_workspace), shell=True)
+            
+        with open('{}/run_ansible.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
+            subprocess.run('ansible-playbook {}/refresh_podman.yml'.format(GlobalVars.ansible_workspace), 
+                           shell=True,
+                           stdout=f)
 
 
 class RunTestSuite():
     @staticmethod
     def execute():
-        if not subprocess.check_output('avocado --version', shell=True):
-            print('no avocado, need to install')
+        if subprocess.run('avocado --version', shell=True).returncode:
+            print('no avocado, please install')
             sys.exit(1)
         if not os.path.exists(GlobalVars.test_suite + '/test'):
             print('seems that there is no directory of cases, please check.')
@@ -90,10 +97,6 @@ class RunTestSuite():
         if not os.path.exists(GlobalVars.environment_file):
             print('need configuration for the test suite')
             sys.exit(1)
-            
-        # make bots for the dependencies of the selenium cases
-        subprocess.run('make -C {} bots'.format(GlobalVars.test_suite), 
-                       shell=True)
 
         browsers = ['chrome', 'firefox', 'edge']
 
@@ -101,7 +104,7 @@ class RunTestSuite():
             test_suite_conf = yaml.load(f, Loader=yaml.FullLoader)
             
         if not GlobalVars.machines and 'GUEST' not in test_suite_conf.keys():
-            print('no machine, need to add -p for the command or set it in the environment_file')
+            print('no machine set, please add -p for the command or set it in the environment_file')
             sys.exit(1)
             
         os.environ['GUEST'] = GlobalVars.machines or test_suite_conf['GUEST']
@@ -109,15 +112,14 @@ class RunTestSuite():
         os.environ['URL_BASE'] = test_suite_conf['URL_BASE']
         os.environ['URLSOURCE'] = test_suite_conf['URLSOURCE']
         os.environ['NFS'] = test_suite_conf['NFS']
-
-        res_path = GlobalVars.workspace_prefix + '/result_' + secrets.token_hex(5)
-        print('the result path is {}'.format(res_path))
-
-        for browser in browsers:
-            os.environ['BROWSER'] = browser
-            subprocess.check_output(
-                'avocado run {} -t {} --job-results-dir {}'.format(
-                    GlobalVars.test_suite, 
-                    'machines', 
-                    res_path + '/' + browser), 
-                shell=True)
+        
+        with open('{}/run_avocado.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
+            for browser in browsers:
+                os.environ['BROWSER'] = browser
+                subprocess.run(
+                    'avocado run {} -t {} --job-results-dir {}'.format(
+                        GlobalVars.test_suite, 
+                        'machines', 
+                        GlobalVars.test_suite_result + '/' + browser), 
+                    shell=True,
+                    stdout=f)
