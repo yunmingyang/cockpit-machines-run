@@ -49,6 +49,11 @@ def main():
                        dest='run_test_suite', 
                        action='store_true', 
                        help='test suite step')
+    parse.add_argument('-u', 
+                       '--upload', 
+                       dest='upload_test_result', 
+                       action='store_true', 
+                       help='upload test result')
 
     args = parse.parse_args()
     
@@ -69,6 +74,9 @@ def main():
     if args.run_test_suite:
         event_list.append(Event('run_test_suite'))
         handle = RunTestSuiteHandler(handle)
+    if args.upload_test_result:
+        event_list.append(Event('upload_test_result'))
+        handle = UploadTestResultHandler(handle)
 
     
     for e in event_list:

@@ -23,7 +23,6 @@ class Chains:
             self.next.handle(event)
         elif hasattr(self, 'handle_default'):
             self.handle_default(event)
-        
 
 
 class DefaultHandler(Chains):
@@ -48,3 +47,8 @@ class ExecAnsibleHandler(Chains):
 class RunTestSuiteHandler(Chains):
     def handle_run_test_suite(self):
         RunTestSuite().execute()
+
+
+class UploadTestResultHandler(Chains):
+    def handle_upload_test_result(self):
+        UploadTestResult().execute()

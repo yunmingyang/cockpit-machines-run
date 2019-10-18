@@ -56,7 +56,7 @@ class Provision():
         if not os.path.exists(GlobalVars.linchpin_workspace):
             print('no linchpin_workspace')
             sys.exit(1)
-            
+
         with open('{}/run_provision.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
             subprocess.run('linchpin -vvvv -c {} -w {} up'.format(GlobalVars.linchpin_conf, GlobalVars.linchpin_workspace), 
                            shell=True, 
@@ -78,7 +78,7 @@ class ExecAnsible():
         if not os.path.exists(GlobalVars.ansible_workspace):
             print('no ansbile_workspace')
             sys.exit(1)
-            
+
         with open('{}/run_ansible.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
             subprocess.run('ansible-playbook {}/refresh_podman.yml'.format(GlobalVars.ansible_workspace), 
                            shell=True,
@@ -102,24 +102,32 @@ class RunTestSuite():
 
         with open(GlobalVars.environment_file, 'r') as f:
             test_suite_conf = yaml.load(f, Loader=yaml.FullLoader)
-            
+
         if not GlobalVars.machines and 'GUEST' not in test_suite_conf.keys():
             print('no machine set, please add -p for the command or set it in the environment_file')
             sys.exit(1)
-            
+
         os.environ['GUEST'] = GlobalVars.machines or test_suite_conf['GUEST']
         os.environ['HUB'] = test_suite_conf['HUB']
         os.environ['URL_BASE'] = test_suite_conf['URL_BASE']
         os.environ['URLSOURCE'] = test_suite_conf['URLSOURCE']
         os.environ['NFS'] = test_suite_conf['NFS']
-        
+
         with open('{}/run_avocado.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
             for browser in browsers:
                 os.environ['BROWSER'] = browser
-                subprocess.run(
-                    'avocado run {} -t {} --job-results-dir {}'.format(
-                        GlobalVars.test_suite, 
-                        'machines', 
-                        GlobalVars.test_suite_result + '/' + browser), 
-                    shell=True,
-                    stdout=f)
+                subprocess.run('avocado run {} -t {} --job-results-dir {}'.format(GlobalVars.test_suite, 'machines', GlobalVars.test_suite_result + '/' + browser),
+                               shell=True,
+                               stdout=f)
+
+
+class UploadTestResult():
+    @staticmethod
+    def execute():
+        with open('{}/upload'.format(GlobalVars.workspace_prefix), 'r') as f:
+            upload_conf = yaml.load(f, Loader=yaml.FullLoader)
+
+        subprocess.run('scp -r {} root@{}:{}'.format(GlobalVars.test_suite_result,
+                                                     upload_conf['RESHOST'],
+                                                     upload_conf['RESPATH']),
+                       shell=True)
