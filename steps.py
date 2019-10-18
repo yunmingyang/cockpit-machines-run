@@ -58,7 +58,7 @@ class Provision():
             sys.exit(1)
             
         with open('{}/run_provision.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
-            subprocess.run('linchpin -v -w {} up'.format(GlobalVars.linchpin_workspace), 
+            subprocess.run('linchpin -vvvv -c {} -w {} up'.format(GlobalVars.linchpin_conf, GlobalVars.linchpin_workspace), 
                            shell=True, 
                            stdout=f)
 
