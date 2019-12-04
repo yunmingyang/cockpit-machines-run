@@ -3,7 +3,6 @@ import sys
 import yaml
 import json
 import socket
-import urllib3
 import subprocess
 
 
@@ -22,28 +21,15 @@ class Preprocessing:
     @staticmethod
     def execute():
         if os.environ.get('CI_MESSAGE'):
-            if "nightly" in os.environ.get('CI_MESSAGE'):
-                print("Don't need to test nightly build")
-                sys.exit(1)
-                
-        http = urllib3.PoolManager()
-        compose_id = os.environ.get('COMPOSE_ID') or http.request('GET', 'http://download-node-02.eng.bos.redhat.com/rel-eng/rhel-8/RHEL-8/latest-RHEL-8.1/COMPOSE_ID').data.decode('utf-8').strip()
-        compose_status = http.request('GET', 'http://download-node-02.eng.bos.redhat.com/rel-eng/rhel-8/RHEL-8/latest-RHEL-8.1/STATUS').data.decode('utf-8').strip()
-        print('the compose id is {}, and status is {}'.format(compose_id, compose_status))
-
-        if compose_status != 'FINISHED':
-            print('The compose status is not FINISHED.Skip.')
-            sys.exit(1)
-
-        if compose_id:
-            with open(GlobalVars.linchpin_workspace + '/PinFile', 'r+') as f:
-                conf = yaml.load(f, Loader=yaml.FullLoader)
-                conf[GlobalVars.Pinfile_name]['topology']['resource_groups'][0]['resource_definitions'][0]['recipesets'][0]['distro'] = compose_id
-                # move the file point to the head of the file, 
-                # then clear the file content
-                f.seek(0)
-                f.truncate()
-                yaml.dump(conf, f)
+            ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
+        compose_id = os.environ.get('COMPOSE_ID') or ci_msg['msg']['compose_id']
+        print('the compose id is {}'.format(compose_id))
+        with open(GlobalVars.linchpin_workspace + '/PinFile', 'r+') as f:
+            conf = yaml.load(f, Loader=yaml.FullLoader)
+            conf[GlobalVars.Pinfile_name]['topology']['resource_groups'][0]['resource_definitions'][0]['recipesets'][0]['distro'] = compose_id
+            f.seek(0)
+            f.truncate()
+            yaml.dump(conf, f)
         # TODO: add handle for brew with CI_MESSAGE
 
 
