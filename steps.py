@@ -20,10 +20,8 @@ class GlobalVars:
 class Preprocessing:
     @staticmethod
     def execute():
-        if os.environ.get('CI_MESSAGE'):
-            ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
-        print('CI_MESSAGE is', ci_msg)
-        compose_id = os.environ.get('COMPOSE_ID') or ci_msg['msg']['compose_id']
+        ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
+        compose_id = os.environ.get('COMPOSE_ID') or ci_msg['compose_id']
         print('the compose id is {}'.format(compose_id))
         with open(GlobalVars.linchpin_workspace + '/PinFile', 'r+') as f:
             conf = yaml.load(f, Loader=yaml.FullLoader)
