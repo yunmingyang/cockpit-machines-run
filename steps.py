@@ -23,6 +23,8 @@ class Preprocessing:
         ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
         compose_id = os.environ.get('COMPOSE_ID') or ci_msg['compose_id']
         print('the compose id is {}'.format(compose_id))
+        print('update the location of result: ',
+              GlobalVars.test_suite_result.format(compose_id))
         with open(GlobalVars.linchpin_workspace + '/PinFile', 'r+') as f:
             conf = yaml.load(f, Loader=yaml.FullLoader)
             conf[GlobalVars.Pinfile_name]['topology']['resource_groups'][0]['resource_definitions'][0]['recipesets'][0]['distro'] = compose_id

@@ -15,8 +15,9 @@ def init(path):
     GlobalVars.linchpin_conf = '{}/linchpin-workspace/linchpin.conf'.format(GlobalVars.workspace_prefix)
     GlobalVars.ansible_workspace = '{}/ansible-workspace'.format(GlobalVars.workspace_prefix)
     GlobalVars.test_suite = '{}/cockpit'.format(os.environ.get('WORKSPACE', '/root'))
-    GlobalVars.test_suite_result = GlobalVars.test_suite + '/result_' + secrets.token_hex(5)
-    
+    GlobalVars.test_suite_result = GlobalVars.test_suite + '/{}_' + secrets.token_hex(5)
+
+    print('----------result of init----------')
     print('Pinfile_name: ', GlobalVars.Pinfile_name)
     print('workspace_prefix: ', GlobalVars.workspace_prefix)
     print('environment_file: ', GlobalVars.environment_file)
@@ -25,6 +26,7 @@ def init(path):
     print('ansible_workspace: ', GlobalVars.ansible_workspace)
     print('test_suite: ', GlobalVars.test_suite)
     print('test_suite_result: ', GlobalVars.test_suite_result)
+    print('----------result of init----------')
 
 def main():
     parse = argparse.ArgumentParser()
