@@ -1,9 +1,10 @@
 import os
-import sys
+import re
 import yaml
 import json
 import socket
 import subprocess
+from configparser import ConfigParser
 
 
 class GlobalVars:
@@ -18,6 +19,11 @@ class GlobalVars:
 
 
 class Preprocessing:
+    class PreprocessingError(Exception):
+        def __init__(self, msg):
+                super().__init__(msg)
+
+
     @staticmethod
     def execute():
         ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
@@ -31,59 +37,76 @@ class Preprocessing:
             f.seek(0)
             f.truncate()
             yaml.dump(conf, f)
-        # TODO: add handle for brew with CI_MESSAGE
 
 
 class Provision():
+    class ProvisionError(Exception):
+        def __init__(self, msg):
+                super().__init__(msg)
+
+
     @staticmethod
     def execute():
         if subprocess.run('linchpin --version', shell=True).returncode:
-            print('no linchpin, need to install')
-            sys.exit(1)
+            raise ProvisionError('no linchpin, need to install')
         if not os.path.exists(GlobalVars.linchpin_workspace):
-            print('no linchpin_workspace')
-            sys.exit(1)
+            raise ProvisionError('no linchpin_workspace')
 
-        with open('{}/run_provision.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
-            subprocess.run('linchpin -vvvv -c {} -w {} up'.format(GlobalVars.linchpin_conf, GlobalVars.linchpin_workspace), 
-                           shell=True, 
-                           stdout=f)
+        provision_cmd = 'linchpin -c {} -w {} up'.format(GlobalVars.linchpin_conf, GlobalVars.linchpin_workspace)
+        provision_proc = subprocess.Popen(provision_cmd,
+                                          stdout=subprocess.PIPE,
+                                          stderr=subprocess.STDOUT,
+                                          shell=True,
+                                          encoding='utf-8')
+        output, _ = provision_proc.communicate()
+        print('linchpin output is:', output, sep='\n')
+        if 'Unsuccessful provision of resource' in output or 'failed=1' in output:
+            raise ProvisionError('provision failed')
 
-        with open('{}/resources/linchpin.latest'.format(GlobalVars.linchpin_workspace), 'r') as f:
-            res = json.load(f)
-
-        system = res[list(res.keys())[0]]['targets'][0][GlobalVars.Pinfile_name]['outputs']['resources'][0]['system']
-        GlobalVars.machines = socket.gethostbyname(system)
+        match = re.search(r'-+[\s\S]cockpit-machines[\s\S]+\d\s', output).group()
+        inventory_path = (GlobalVars.linchpin_workspace +
+                          '/inventories/' +
+                          'provision-' +
+                          re.sub(r'[-\s]', '', match)[-7:-1] +
+                          '.inventory')
+        print('inventory_path is:', inventory_path)
+        inventory = ConfigParser()
+        inventory.read(inventory_path)
+        if len(inventory['all']) != 1:
+            raise ProvisionError('too many machines')
+        GlobalVars.machines = socket.gethostbyname(dict(inventory['all']).popitem()[-1])
 
 
 class ExecAnsible():
+    class ExecAnsibleError(Exception):
+        def __init__(self, msg):
+                super().__init__(msg)
+
+
     @staticmethod
     def execute():
         if subprocess.run('ansible --version', shell=True).returncode:
-            print('no ansible, need to install')
-            sys.exit(1)
+            raise ExecAnsibleError('no ansible, need to install')
         if not os.path.exists(GlobalVars.ansible_workspace):
-            print('no ansbile_workspace')
-            sys.exit(1)
+            raise ExecAnsibleError('no ansbile_workspace')
 
-        with open('{}/run_ansible.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
-            subprocess.run('ansible-playbook {}/refresh_podman.yml'.format(GlobalVars.ansible_workspace), 
-                           shell=True,
-                           stdout=f)
+        subprocess.run('ansible-playbook {}/refresh_podman.yml'.format(GlobalVars.ansible_workspace), shell=True)
 
 
 class RunTestSuite():
+    class RunTestSuiteError(Exception):
+        def __init__(self, msg):
+                super().__init__(msg)
+
+
     @staticmethod
     def execute():
         if subprocess.run('avocado --version', shell=True).returncode:
-            print('no avocado, please install')
-            sys.exit(1)
+            raise RunTestSuiteError('no avocado, please install')
         if not os.path.exists(GlobalVars.test_suite + '/test'):
-            print('seems that there is no directory of cases, please check.')
-            sys.exit(1)
+            raise RunTestSuiteError('seems that there is no directory of cases, please check.')
         if not os.path.exists(GlobalVars.environment_file):
-            print('need configuration for the test suite')
-            sys.exit(1)
+            raise RunTestSuiteError('need configuration for the test suite')
 
         browsers = ['chrome', 'firefox', 'edge']
 
@@ -91,8 +114,7 @@ class RunTestSuite():
             test_suite_conf = yaml.load(f, Loader=yaml.FullLoader)
 
         if not GlobalVars.machines and 'GUEST' not in test_suite_conf.keys():
-            print('no machine set, please add -p for the command or set it in the environment_file')
-            sys.exit(1)
+            raise RunTestSuiteError('no machine set, please add -p for the command or set it in the environment_file')
 
         os.environ['GUEST'] = GlobalVars.machines or test_suite_conf['GUEST']
         os.environ['HUB'] = test_suite_conf['HUB']
@@ -100,12 +122,10 @@ class RunTestSuite():
         os.environ['URLSOURCE'] = test_suite_conf['URLSOURCE']
         os.environ['NFS'] = test_suite_conf['NFS']
 
-        with open('{}/run_avocado.latest'.format(GlobalVars.workspace_prefix), 'w+') as f:
-            for browser in browsers:
-                os.environ['BROWSER'] = browser
-                subprocess.run('avocado run {} -t {} --job-results-dir {}'.format(GlobalVars.test_suite, 'machines', GlobalVars.test_suite_result + '/' + browser),
-                               shell=True,
-                               stdout=f)
+        for browser in browsers:
+            os.environ['BROWSER'] = browser
+            subprocess.run('avocado run {} -t {} --job-results-dir {}'.format(GlobalVars.test_suite, 'machines', GlobalVars.test_suite_result + '/' + browser),
+                            shell=True)
 
 
 class UploadTestResult():
