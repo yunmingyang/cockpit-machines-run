@@ -19,11 +19,6 @@ class GlobalVars:
 
 
 class Preprocessing:
-    class PreprocessingError(Exception):
-        def __init__(self, msg):
-                super().__init__(msg)
-
-
     @staticmethod
     def execute():
         ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
@@ -40,19 +35,14 @@ class Preprocessing:
 
 
 class Provision():
-    class ProvisionError(Exception):
-        def __init__(self, msg):
-                super().__init__(msg)
-
-
     @staticmethod
     def execute():
         if subprocess.run('linchpin --version', shell=True).returncode:
-            raise ProvisionError('no linchpin, need to install')
+            raise Exception('no linchpin, need to install')
         if not os.path.exists(GlobalVars.linchpin_workspace):
-            raise ProvisionError('no linchpin_workspace')
+            raise Exception('no linchpin_workspace')
 
-        provision_cmd = 'linchpin -c {} -w {} up'.format(GlobalVars.linchpin_conf, GlobalVars.linchpin_workspace)
+        provision_cmd = 'linchpin -vvv -c {} -w {} up'.format(GlobalVars.linchpin_conf, GlobalVars.linchpin_workspace)
         provision_proc = subprocess.Popen(provision_cmd,
                                           stdout=subprocess.PIPE,
                                           stderr=subprocess.STDOUT,
@@ -61,7 +51,7 @@ class Provision():
         output, _ = provision_proc.communicate()
         print('linchpin output is:', output, sep='\n')
         if 'Unsuccessful provision of resource' in output or 'failed=1' in output:
-            raise ProvisionError('provision failed')
+            raise Exception('provision failed')
 
         match = re.search(r'-+[\s\S]cockpit-machines[\s\S]+\d\s', output).group()
         inventory_path = (GlobalVars.linchpin_workspace +
@@ -73,40 +63,30 @@ class Provision():
         inventory = ConfigParser()
         inventory.read(inventory_path)
         if len(inventory['all']) != 1:
-            raise ProvisionError('too many machines')
+            raise Exception('too many machines')
         GlobalVars.machines = socket.gethostbyname(dict(inventory['all']).popitem()[-1])
 
 
 class ExecAnsible():
-    class ExecAnsibleError(Exception):
-        def __init__(self, msg):
-                super().__init__(msg)
-
-
     @staticmethod
     def execute():
         if subprocess.run('ansible --version', shell=True).returncode:
-            raise ExecAnsibleError('no ansible, need to install')
+            raise Exception('no ansible, need to install')
         if not os.path.exists(GlobalVars.ansible_workspace):
-            raise ExecAnsibleError('no ansbile_workspace')
+            raise Exception('no ansbile_workspace')
 
         subprocess.run('ansible-playbook {}/refresh_podman.yml'.format(GlobalVars.ansible_workspace), shell=True)
 
 
 class RunTestSuite():
-    class RunTestSuiteError(Exception):
-        def __init__(self, msg):
-                super().__init__(msg)
-
-
     @staticmethod
     def execute():
         if subprocess.run('avocado --version', shell=True).returncode:
-            raise RunTestSuiteError('no avocado, please install')
+            raise Exception('no avocado, please install')
         if not os.path.exists(GlobalVars.test_suite + '/test'):
-            raise RunTestSuiteError('seems that there is no directory of cases, please check.')
+            raise Exception('seems that there is no directory of cases, please check.')
         if not os.path.exists(GlobalVars.environment_file):
-            raise RunTestSuiteError('need configuration for the test suite')
+            raise Exception('need configuration for the test suite')
 
         browsers = ['chrome', 'firefox', 'edge']
 
@@ -114,7 +94,7 @@ class RunTestSuite():
             test_suite_conf = yaml.load(f, Loader=yaml.FullLoader)
 
         if not GlobalVars.machines and 'GUEST' not in test_suite_conf.keys():
-            raise RunTestSuiteError('no machine set, please add -p for the command or set it in the environment_file')
+            raise Exception('no machine set, please add -p for the command or set it in the environment_file')
 
         os.environ['GUEST'] = GlobalVars.machines or test_suite_conf['GUEST']
         os.environ['HUB'] = test_suite_conf['HUB']
