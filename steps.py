@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import yaml
 import json
 import socket
@@ -21,11 +22,26 @@ class GlobalVars:
 class Preprocessing:
     @staticmethod
     def execute():
+        if subprocess.run('bkr --version', shell=True).returncode:
+            raise Exception('no bkr, need to install')
+
         ci_msg = json.loads(os.environ.get('CI_MESSAGE'))
         compose_id = os.environ.get('COMPOSE_ID') or ci_msg['compose_id']
         GlobalVars.test_suite_result = GlobalVars.test_suite_result.format(compose_id)
         print('the compose id is {}'.format(compose_id))
         print('update the location of result: ', GlobalVars.test_suite_result)
+
+        # check distro in ten hours
+        count = 0
+        while count <= 60:
+            if subprocess.run('bkr distros-list --name={}'.format(compose_id)).returncode:
+                if count == 60:
+                    raise Exception('no distro-list')
+                count += 1
+                time.sleep(600)
+            else:
+                break
+
         with open(GlobalVars.linchpin_workspace + '/PinFile', 'r+') as f:
             conf = yaml.load(f, Loader=yaml.FullLoader)
             conf[GlobalVars.Pinfile_name]['topology']['resource_groups'][0]['resource_definitions'][0]['recipesets'][0]['distro'] = compose_id
