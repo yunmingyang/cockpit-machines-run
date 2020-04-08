@@ -34,9 +34,10 @@ class Preprocessing:
         # check distro in ten hours
         count = 0
         while count <= 60:
-            if subprocess.run('bkr distros-list --name={}'.format(compose_id)).returncode:
+            if subprocess.run('bkr distros-list --name={}'.format(compose_id), shell=True).returncode:
                 if count == 60:
                     raise Exception('no distro-list')
+                print('{} times'.format(count))
                 count += 1
                 time.sleep(600)
             else:
